@@ -63,7 +63,6 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
         if data.y.dim() == 2:
             assert data.y.size(1) == 1
             data.y = data.y.squeeze()
-        print(data.y.shape)
 
         model.to(device).reset_parameters()
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)

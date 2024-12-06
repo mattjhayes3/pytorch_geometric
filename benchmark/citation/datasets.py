@@ -7,7 +7,6 @@ from torch_geometric.datasets import Planetoid, Reddit
 
 
 def get_planetoid_dataset(name, normalize_features=False, transform=None):
-    print("reading dataset")
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
     if name == "Reddit":
         dataset = Reddit(path)
