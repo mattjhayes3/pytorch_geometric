@@ -42,7 +42,7 @@ def random_planetoid_splits(data, num_classes):
 
 
 def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
-              profiling, use_compile, permute_masks=None, logger=None):
+              profiling, use_compile, args, permute_masks=None, logger=None):
     val_losses, val_accs, test_accs, durations = [], [], [], []
     if use_compile:
         model = torch.compile(model)
@@ -101,10 +101,19 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
                 test_acc = eval_info['test_acc']
 
             val_loss_history.append(eval_info['val_loss'])
-            if early_stopping > 0 and epoch > epochs // 2:
-                tmp = tensor(val_loss_history[-(early_stopping + 1):-1])
-                if eval_info['val_loss'] > tmp.mean().item():
-                    break
+            if not hasattr(args, 'early_stopping_strat'
+                           ) or args.early_stopping_strat == 'mean':
+                if early_stopping > 0 and epoch > epochs // 2:
+                    tmp = tensor(val_loss_history[-(early_stopping + 1):-1])
+                    if eval_info['val_loss'] > tmp.mean().item():
+                        break
+            elif args.early_stopping_strat == 'max':
+                if early_stopping > 0 and epoch > early_stopping:
+                    tmp = tensor(val_loss_history[-(early_stopping + 1):-1])
+                    if eval_info['val_loss'] > tmp.max().item():
+                        break
+            else:
+                assert False, args.early_stopping_strat
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -173,11 +182,11 @@ def run_inference(dataset, model, epochs, profiling, bf16, use_compile,
 
 
 def run(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
-        inference, profiling, bf16, use_compile, permute_masks=None,
+        inference, profiling, bf16, use_compile, args, permute_masks=None,
         logger=None):
     if not inference:
         run_train(dataset, model, runs, epochs, lr, weight_decay,
-                  early_stopping, profiling, use_compile, permute_masks,
+                  early_stopping, profiling, use_compile, args, permute_masks,
                   logger)
     else:
         run_inference(dataset, model, epochs, profiling, bf16, use_compile,
