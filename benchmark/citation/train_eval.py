@@ -1,3 +1,4 @@
+import sys
 import time
 
 import torch
@@ -10,8 +11,8 @@ from torch_geometric.utils import index_to_mask
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
-elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-    device = torch.device('mps')
+# elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+#     device = torch.device('mps')
 else:
     device = torch.device('cpu')
 
@@ -42,7 +43,7 @@ def random_planetoid_splits(data, num_classes):
 
 def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
               profiling, use_compile, permute_masks=None, logger=None):
-    val_losses, accs, durations = [], [], []
+    val_losses, val_accs, test_accs, durations = [], [], [], []
     if use_compile:
         model = torch.compile(model)
 
@@ -68,6 +69,7 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
 
         best_val_loss = float('inf')
         test_acc = 0
+        val_acc = 0
         val_loss_history = []
 
         for epoch in range(1, epochs + 1):
@@ -84,6 +86,7 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
 
             if eval_info['val_loss'] < best_val_loss:
                 best_val_loss = eval_info['val_loss']
+                val_acc = eval_info['val_acc']
                 test_acc = eval_info['test_acc']
 
             val_loss_history.append(eval_info['val_loss'])
@@ -103,14 +106,23 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
 
         t_end = time.perf_counter()
 
+        val_accs.append(val_acc)
         val_losses.append(best_val_loss)
-        accs.append(test_acc)
+        test_accs.append(test_acc)
         durations.append(t_end - t_start)
-    loss, acc, duration = tensor(val_losses), tensor(accs), tensor(durations)
 
-    print(f'Val Loss: {float(loss.mean()):.4f}, '
-          f'Test Accuracy: {float(acc.mean()):.3f} ± {float(acc.std()):.3f}, '
-          f'Duration: {float(duration.mean()):.3f}s')
+    # loss, acc, duration = tensor(val_losses), tensor(accs), tensor(durations)
+    # print(f'Val Loss: {float(loss.mean()):.4f}, '
+    #       f'Test Accuracy: {float(acc.mean()):.3f} ± {float(acc.std()):.3f}, '
+    #       f'Duration: {float(duration.mean()):.3f}s')
+    sorted_args = sorted(sys.argv[1:])
+    cmd = ' '.join([sys.argv[0].split('/')[-1]] + sorted_args)
+    cols = [cmd]
+    for metric in [val_losses, val_accs, test_accs, durations]:
+        metric = tensor(metric)
+        cols.append(str(metric.mean().item()))
+        cols.append(str(metric.std().item()))
+    print("\t".join(cols))
 
     if profiling:
         with torch_profile():

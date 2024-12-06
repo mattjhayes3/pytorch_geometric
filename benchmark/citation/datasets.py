@@ -1,12 +1,15 @@
 import os.path as osp
 
 import torch_geometric.transforms as T
-from torch_geometric.datasets import Planetoid
+from torch_geometric.datasets import Planetoid, Reddit
 
 
 def get_planetoid_dataset(name, normalize_features=False, transform=None):
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
-    dataset = Planetoid(path, name)
+    if name == "Reddit":
+        dataset = Reddit(path)
+    else:
+        dataset = Planetoid(path, name)
 
     if transform is not None and normalize_features:
         dataset.transform = T.Compose([T.NormalizeFeatures(), transform])

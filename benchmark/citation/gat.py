@@ -35,11 +35,11 @@ class Net(torch.nn.Module):
         conv = GATv2Conv if args.v2 else GATConv
         self.conv1 = conv(dataset.num_features, args.hidden, heads=args.heads,
                           dropout=args.dropout,
-                          iteractive_attn=not args.non_interactive)
+                          interactive_attn=not args.non_interactive)
         self.conv2 = conv(args.hidden * args.heads, dataset.num_classes,
                           heads=args.output_heads, concat=False,
                           dropout=args.dropout,
-                          iteractive_attn=not args.non_interactive)
+                          interactive_attn=not args.non_interactive)
 
     def reset_parameters(self):
         self.conv1.reset_parameters()
