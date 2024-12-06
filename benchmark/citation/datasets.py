@@ -1,13 +1,19 @@
 import os.path as osp
 
+from ogb.nodeproppred import PygNodePropPredDataset
+
 import torch_geometric.transforms as T
 from torch_geometric.datasets import Planetoid, Reddit
 
 
 def get_planetoid_dataset(name, normalize_features=False, transform=None):
+    print("reading dataset")
     path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
     if name == "Reddit":
         dataset = Reddit(path)
+    elif name == "Arxiv":
+        dataset = PygNodePropPredDataset('ogbn-arxiv',
+                                         osp.join(osp.dirname(path), "OGB"))
     else:
         dataset = Planetoid(path, name)
 
