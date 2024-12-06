@@ -306,7 +306,6 @@ class GATv2Conv(MessagePassing):
                 x_r = self.lin_r(x_r).view(-1, H, C)
 
         assert x_l is not None
-        assert x_r is not None
 
         if self.add_self_loops:
             if isinstance(edge_index, Tensor):
@@ -361,7 +360,7 @@ class GATv2Conv(MessagePassing):
     def edge_update(self, x_j: Tensor, x_i: Tensor, edge_attr: OptTensor,
                     index: Tensor, ptr: OptTensor,
                     dim_size: Optional[int]) -> Tensor:
-        x = x_i + x_j if self.iteractive_attn else x_j
+        x = x_i + x_j if x_i is not None and self.iteractive_attn else x_j
 
         if edge_attr is not None:
             if edge_attr.dim() == 1:

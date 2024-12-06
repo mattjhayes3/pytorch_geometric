@@ -26,6 +26,13 @@ def test_gat_conv(residual, interactive_attn):
     assert out.size() == (4, 64)
     assert torch.allclose(conv(x1, edge_index, size=(4, 4)), out)
     assert torch.allclose(conv(x1, adj1.t()), out, atol=1e-6)
+    if not interactive_attn and not residual:
+        other_conv = GATConv(8, 32, heads=2, residual=False)
+        other_conv.lin.weight.data = conv.lin.weight.data
+        other_conv.att_src.data = conv.att_src.data
+        other_out = other_conv((x1, None), edge_index)
+        assert out.shape == other_out.shape
+        assert torch.allclose(other_out, out, atol=1e-6)
 
     if torch_geometric.typing.WITH_TORCH_SPARSE:
         adj2 = SparseTensor.from_edge_index(edge_index, sparse_sizes=(4, 4))
@@ -122,6 +129,13 @@ def test_gat_conv(residual, interactive_attn):
 
     out1 = conv((x1, x2), edge_index)
     assert out1.size() == (2, 64)
+    if not interactive_attn and not residual:
+        other_conv = GATConv((8, 16), 32, heads=2, residual=False)
+        other_conv.lin_src.weight.data = conv.lin_src.weight.data
+        other_conv.att_src.data = conv.att_src.data
+        other_out = other_conv((x1, None), edge_index, size=(4, 2))
+        assert out1.shape == other_out.shape
+        assert torch.allclose(other_out, out1, atol=1e-6)
     assert torch.allclose(conv((x1, x2), edge_index, size=(4, 2)), out1)
     assert torch.allclose(conv((x1, x2), adj1.t()), out1, atol=1e-6)
 
