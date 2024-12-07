@@ -52,6 +52,7 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
         if permute_masks is not None:
             data = permute_masks(data, dataset.num_classes)
         if not hasattr(data, "train_mask"):
+            data.y = data.y.view(-1)
             split_idx = dataset.get_idx_split()
             data.train_mask = index_to_mask(split_idx['train'],
                                             size=data.num_nodes)
@@ -60,9 +61,6 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
             data.test_mask = index_to_mask(split_idx['test'],
                                            size=data.num_nodes)
         data = data.to(device)
-        if data.y.dim() == 2:
-            assert data.y.size(1) == 1
-            data.y = data.y.squeeze()
 
         model.to(device).reset_parameters()
         optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -142,6 +140,8 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
         metric = tensor(metric)
         cols.append(str(metric.mean().item()))
         cols.append(str(metric.std().item()))
+    if hasattr(args, 'runs'):
+        cols.append(args.runs)
     print("\t".join(cols))
 
     if profiling:

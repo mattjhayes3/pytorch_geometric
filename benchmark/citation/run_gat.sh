@@ -1,5 +1,5 @@
 #!/bin/sh
-
+echo "command	val_loss_mean	val_loss_std	val_acc_mean	val_acc_std	test_acc_mean	test_acc_std	duration_mean	duration_std	runs"
 #echo "Cora"
 python gat.py --dataset=Cora
 python gat.py --dataset=Cora --v2

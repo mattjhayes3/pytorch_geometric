@@ -12,7 +12,8 @@ def get_planetoid_dataset(name, normalize_features=False, transform=None):
         dataset = Reddit(path)
     elif name == "Arxiv":
         dataset = PygNodePropPredDataset('ogbn-arxiv',
-                                         osp.join(osp.dirname(path), "OGB"))
+                                         osp.join(osp.dirname(path), "OGB"),
+                                         T.ToUndirected())
     else:
         dataset = Planetoid(path, name)
 

@@ -27,6 +27,7 @@ parser.add_argument('--bf16', action='store_true')
 parser.add_argument('--compile', action='store_true')
 parser.add_argument('--non_interactive', action='store_true')
 parser.add_argument('--v2', action='store_true')
+parser.add_argument('--batch_norm', action='store_true')
 args = parser.parse_args()
 
 
@@ -41,6 +42,8 @@ class Net(torch.nn.Module):
                           heads=args.output_heads, concat=False,
                           dropout=args.dropout,
                           interactive_attn=not args.non_interactive)
+        if args.batch_norm:
+            self.norm = torch.nn.BatchNorm1d(args.hidden * args.heads)
 
     def reset_parameters(self):
         self.conv1.reset_parameters()
@@ -49,7 +52,10 @@ class Net(torch.nn.Module):
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
         x = F.dropout(x, p=args.dropout, training=self.training)
-        x = F.elu(self.conv1(x, edge_index))
+        x = self.conv1(x, edge_index)
+        if args.batch_norm:
+            x = self.norm(x)
+        x = F.elu(x)
         x = F.dropout(x, p=args.dropout, training=self.training)
         x = self.conv2(x, edge_index)
         return F.log_softmax(x, dim=1)
