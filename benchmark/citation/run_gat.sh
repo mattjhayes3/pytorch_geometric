@@ -15,3 +15,6 @@ python gat.py --dataset=PubMed --lr=0.01 --weight_decay=0.001 --output_heads=8
 python gat.py --dataset=PubMed --v2 --lr=0.01 --weight_decay=0.001 --output_heads=8
 python gat.py --dataset=PubMed --lr=0.01 --weight_decay=0.001 --output_heads=8 --random_splits
 python gat.py --dataset=PubMed --v2 --lr=0.01 --weight_decay=0.001 --output_heads=8 --random_splits
+# echo "Arxiv"
+python gat.py --dataset=Arxiv --runs=20 --batch_norm --no_normalize_features
+python gat.py --dataset=Arxiv --runs=20 --v2 --batch_norm --no_normalize_features

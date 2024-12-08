@@ -141,7 +141,7 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
         cols.append(str(metric.mean().item()))
         cols.append(str(metric.std().item()))
     if hasattr(args, 'runs'):
-        cols.append(args.runs)
+        cols.append(str(args.runs))
     print("\t".join(cols))
 
     if profiling:

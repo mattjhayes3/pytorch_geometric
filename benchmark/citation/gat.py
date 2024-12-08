@@ -65,7 +65,7 @@ dataset = get_planetoid_dataset(args.dataset, not args.no_normalize_features)
 permute_masks = random_planetoid_splits if args.random_splits else None
 run(dataset, Net(dataset), args.runs, args.epochs, args.lr, args.weight_decay,
     args.early_stopping, args.inference, args.profile, args.bf16, args.compile,
-    permute_masks)
+    args, permute_masks)
 
 if args.profile:
     rename_profile_file('citation', GATConv.__name__, args.dataset,
