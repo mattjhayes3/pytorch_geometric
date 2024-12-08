@@ -81,3 +81,21 @@ python arma.py --dataset=PubMed --num_stacks=2 --num_layers=1 --skip_dropout=0.5
 # echo "APPNP"
 python appnp.py --dataset=PubMed --alpha=0.1
 python appnp.py --dataset=PubMed --alpha=0.1 --random_splits
+
+
+python gcn.py --dataset=Arxiv --runs=20 --batch_norm --no_normalize_features
+
+# echo "GAT"
+python gat.py --dataset=Arxiv --runs=20 --batch_norm --no_normalize_features
+
+# echo "Cheby"
+python cheb.py --dataset=Arxiv --runs=20 --no_normalize_features --num_hops=2
+
+# echo "SGC"
+python sgc.py --dataset=Arxiv --runs=20 --no_normalize_features --K=2 --weight_decay=0.0005
+
+# echo "ARMA"
+python arma.py --dataset=Arxiv --runs=20 --no_normalize_features --num_stacks=2 --num_layers=1 --skip_dropout=0
+
+# echo "APPNP"
+python appnp.py --dataset=Arxiv --runs=20 --no_normalize_features --alpha=0.1
