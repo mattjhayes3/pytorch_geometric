@@ -1,3 +1,4 @@
+import sys
 import time
 
 import torch
@@ -5,14 +6,14 @@ import torch.nn.functional as F
 from torch import tensor
 from torch.optim import Adam
 
+from torch_geometric.nn.functional import loge
 from torch_geometric.profile import timeit, torch_profile
 from torch_geometric.utils import index_to_mask
-from torch_geometric.nn.functional import loge
 
 if torch.cuda.is_available():
     device = torch.device('cuda')
-elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-    device = torch.device('mps')
+# elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+#     device = torch.device('mps')
 else:
     device = torch.device('cpu')
 
@@ -42,8 +43,8 @@ def random_planetoid_splits(data, num_classes):
 
 
 def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
-              profiling, use_compile, permute_masks=None, logger=None):
-    val_losses, accs, durations = [], [], []
+              profiling, use_compile, args, permute_masks=None, logger=None):
+    val_losses, val_accs, test_accs, durations = [], [], [], []
     if use_compile:
         model = torch.compile(model)
 
@@ -51,6 +52,15 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
         data = dataset[0]
         if permute_masks is not None:
             data = permute_masks(data, dataset.num_classes)
+        if not hasattr(data, "train_mask"):
+            data.y = data.y.view(-1)
+            split_idx = dataset.get_idx_split()
+            data.train_mask = index_to_mask(split_idx['train'],
+                                            size=data.num_nodes)
+            data.val_mask = index_to_mask(split_idx['valid'],
+                                          size=data.num_nodes)
+            data.test_mask = index_to_mask(split_idx['test'],
+                                           size=data.num_nodes)
         data = data.to(device)
 
         model.to(device).reset_parameters()
@@ -69,15 +79,16 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
 
         best_val_loss = float('inf')
         test_acc = 0
+        val_acc = 0
         val_loss_history = []
 
         for epoch in range(1, epochs + 1):
             if run == runs - 1 and epoch == epochs:
                 with timeit():
-                    train(model, optimizer, data, loss_fn)
+                    train(model, optimizer, data, args)
             else:
-                train(model, optimizer, data, loss_fn)
-            eval_info = evaluate(model, data, loss_fn)
+                train(model, optimizer, data, args)
+            eval_info = evaluate(model, data)
             eval_info['epoch'] = epoch
 
             if logger is not None:
@@ -85,13 +96,23 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
 
             if eval_info['val_loss'] < best_val_loss:
                 best_val_loss = eval_info['val_loss']
+                val_acc = eval_info['val_acc']
                 test_acc = eval_info['test_acc']
 
             val_loss_history.append(eval_info['val_loss'])
-            if early_stopping > 0 and epoch > epochs // 2:
-                tmp = tensor(val_loss_history[-(early_stopping + 1):-1])
-                if eval_info['val_loss'] > tmp.mean().item():
-                    break
+            if not hasattr(args, 'early_stopping_strat'
+                           ) or args.early_stopping_strat == 'mean':
+                if early_stopping > 0 and epoch > epochs // 2:
+                    tmp = tensor(val_loss_history[-(early_stopping + 1):-1])
+                    if eval_info['val_loss'] > tmp.mean().item():
+                        break
+            elif args.early_stopping_strat == 'max':
+                if early_stopping > 0 and epoch > early_stopping:
+                    tmp = tensor(val_loss_history[-(early_stopping + 1):-1])
+                    if eval_info['val_loss'] > tmp.max().item():
+                        break
+            else:
+                assert False, args.early_stopping_strat
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -104,18 +125,29 @@ def run_train(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
 
         t_end = time.perf_counter()
 
+        val_accs.append(val_acc)
         val_losses.append(best_val_loss)
-        accs.append(test_acc)
+        test_accs.append(test_acc)
         durations.append(t_end - t_start)
-    loss, acc, duration = tensor(val_losses), tensor(accs), tensor(durations)
 
-    print(f'Val Loss: {float(loss.mean()):.4f}, '
-          f'Test Accuracy: {float(acc.mean()):.3f} ± {float(acc.std()):.3f}, '
-          f'Duration: {float(duration.mean()):.3f}s')
+    # loss, acc, duration = tensor(val_losses), tensor(accs), tensor(durations)
+    # print(f'Val Loss: {float(loss.mean()):.4f}, '
+    #       f'Test Accuracy: {float(acc.mean()):.3f} ± {float(acc.std()):.3f}, '
+    #       f'Duration: {float(duration.mean()):.3f}s')
+    sorted_args = sorted(sys.argv[1:])
+    cmd = ' '.join([sys.argv[0].split('/')[-1]] + sorted_args)
+    cols = [cmd]
+    for metric in [val_losses, val_accs, test_accs, durations]:
+        metric = tensor(metric)
+        cols.append(str(metric.mean().item()))
+        cols.append(str(metric.std().item()))
+    if hasattr(args, 'runs'):
+        cols.append(str(args.runs))
+    print("\t".join(cols))
 
     if profiling:
         with torch_profile():
-            train(model, optimizer, data)
+            train(model, optimizer, data, args)
 
 
 @torch.no_grad()
@@ -151,22 +183,37 @@ def run_inference(dataset, model, epochs, profiling, bf16, use_compile,
 
 
 def run(dataset, model, runs, epochs, lr, weight_decay, early_stopping,
-        inference, profiling, bf16, use_compile, permute_masks=None,
+        inference, profiling, bf16, use_compile, args, permute_masks=None,
         logger=None):
     if not inference:
         run_train(dataset, model, runs, epochs, lr, weight_decay,
-                  early_stopping, profiling, use_compile, permute_masks,
+                  early_stopping, profiling, use_compile, args, permute_masks,
                   logger)
     else:
         run_inference(dataset, model, epochs, profiling, bf16, use_compile,
                       permute_masks, logger)
 
 
-def train(model, optimizer, data):
+def get_loss_fn(args):
+    assert hasattr(args, 'loss')
+    if args.loss == 'nll':
+        return F.nll_loss
+    elif args.loss == 'loge':
+        return loge
+    # elif args.loss == 'cross_entropy':
+    #     return F.cross_entropy
+    # elif args.loss == 'loge_with_logits':
+    #     return loge_with_logits
+    else:
+        raise ValueError(args.loss)
+
+
+def train(model, optimizer, data, args):
+
     model.train()
     optimizer.zero_grad()
     out = model(data)
-    loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
+    loss = get_loss_fn(args)(out[data.train_mask], data.y[data.train_mask])
     loss.backward()
     optimizer.step()
 

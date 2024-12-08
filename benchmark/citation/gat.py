@@ -24,6 +24,10 @@ parser.add_argument('--inference', action='store_true')
 parser.add_argument('--profile', action='store_true')
 parser.add_argument('--bf16', action='store_true')
 parser.add_argument('--compile', action='store_true')
+parser.add_argument('--batch_norm', action='store_true')
+parser.add_argument(
+    '--loss', choices=['nll', 'loge', 'cross_entropy', 'loge_with_logits'],
+    default='nll')
 args = parser.parse_args()
 
 
@@ -35,6 +39,8 @@ class Net(torch.nn.Module):
         self.conv2 = GATConv(args.hidden * args.heads, dataset.num_classes,
                              heads=args.output_heads, concat=False,
                              dropout=args.dropout)
+        self.norm = (torch.nn.BatchNorm1d(args.hidden * args.heads)
+                     if args.batch_norm else None)
 
     def reset_parameters(self):
         self.conv1.reset_parameters()
@@ -43,7 +49,10 @@ class Net(torch.nn.Module):
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
         x = F.dropout(x, p=args.dropout, training=self.training)
-        x = F.elu(self.conv1(x, edge_index))
+        x = self.conv1(x, edge_index)
+        if self.norm is not None:
+            x = self.norm(x)
+        x = F.elu(x)
         x = F.dropout(x, p=args.dropout, training=self.training)
         x = self.conv2(x, edge_index)
         return F.log_softmax(x, dim=1)
@@ -53,7 +62,7 @@ dataset = get_planetoid_dataset(args.dataset, not args.no_normalize_features)
 permute_masks = random_planetoid_splits if args.random_splits else None
 run(dataset, Net(dataset), args.runs, args.epochs, args.lr, args.weight_decay,
     args.early_stopping, args.inference, args.profile, args.bf16, args.compile,
-    permute_masks)
+    args, permute_masks)
 
 if args.profile:
     rename_profile_file('citation', GATConv.__name__, args.dataset,
