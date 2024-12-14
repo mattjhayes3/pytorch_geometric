@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from citation import get_planetoid_dataset, random_planetoid_splits, run
 
-from torch_geometric.nn import GATConv
+from torch_geometric.nn import GATConv, GATConvOld
 from torch_geometric.profile import rename_profile_file
 
 parser = argparse.ArgumentParser()
@@ -24,17 +24,19 @@ parser.add_argument('--inference', action='store_true')
 parser.add_argument('--profile', action='store_true')
 parser.add_argument('--bf16', action='store_true')
 parser.add_argument('--compile', action='store_true')
+parser.add_argument('--old', action='store_true')
 args = parser.parse_args()
 
 
 class Net(torch.nn.Module):
     def __init__(self, dataset):
         super().__init__()
-        self.conv1 = GATConv(dataset.num_features, args.hidden,
-                             heads=args.heads, dropout=args.dropout)
-        self.conv2 = GATConv(args.hidden * args.heads, dataset.num_classes,
-                             heads=args.output_heads, concat=False,
-                             dropout=args.dropout)
+        conv = GATConvOld if args.old else GATConv
+        self.conv1 = conv((dataset.num_features, dataset.num_features),
+                          args.hidden, heads=args.heads, dropout=args.dropout)
+        self.conv2 = conv((args.hidden * args.heads, args.hidden * args.heads),
+                          dataset.num_classes, heads=args.output_heads,
+                          concat=False, dropout=args.dropout)
 
     def reset_parameters(self):
         self.conv1.reset_parameters()
@@ -43,9 +45,9 @@ class Net(torch.nn.Module):
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
         x = F.dropout(x, p=args.dropout, training=self.training)
-        x = F.elu(self.conv1(x, edge_index))
+        x = F.elu(self.conv1((x, x), edge_index))
         x = F.dropout(x, p=args.dropout, training=self.training)
-        x = self.conv2(x, edge_index)
+        x = self.conv2((x, x), edge_index)
         return F.log_softmax(x, dim=1)
 
 
