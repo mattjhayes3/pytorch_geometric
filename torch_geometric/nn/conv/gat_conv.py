@@ -163,12 +163,13 @@ class GATConv(MessagePassing):
         if isinstance(in_channels, int):
             self.lin = Linear(in_channels, heads * out_channels, bias=False,
                               weight_initializer='glorot')
+            self.att_src = Parameter(torch.empty(1, heads, in_channels))
             self.att_dst = Parameter(torch.empty(1, heads, in_channels))
         else:
             self.lin = Linear(in_channels[0], heads * out_channels, bias=False,
                               weight_initializer='glorot')
+            self.att_src = Parameter(torch.empty(1, heads, in_channels[0]))
             self.att_dst = Parameter(torch.empty(1, heads, in_channels[1]))
-        self.att_src = Parameter(torch.empty(1, heads, out_channels))
 
         if edge_dim is not None:
             self.lin_edge = Linear(edge_dim, heads * out_channels, bias=False,
@@ -279,31 +280,24 @@ class GATConv(MessagePassing):
         # arguments conditioned on type (`None` or `bool`), not based on its
         # actual value.
 
-        H, C = self.heads, self.out_channels
-
         res: Optional[Tensor] = None
 
-        # We first transform the input node features. If a tuple is passed, we
-        # transform source and target node features via separate weights:
+        # First unify the cases where the source and target have separate
+        # features vs the same features.
         if isinstance(x, Tensor):
             assert x.dim() == 2, "Static graphs not supported in 'GATConv'"
-
-            if self.res is not None:
-                res = self.res(x)
-
-            x_src = self.lin(x).view(-1, H, C)
-            x_dst = x.unsqueeze(1)
+            x_src = x_dst = x.unsqueeze(1)
 
         else:  # Tuple of source and target node features:
             x_src, x_dst = x
             assert x_src.dim() == 2, "Static graphs not supported in 'GATConv'"
-
-            if x_dst is not None and self.res is not None:
-                res = self.res(x_dst)
-
-            x_src = self.lin(x_src).view(-1, H, C)
+            x_src = x_src.unsqueeze(1)
             if x_dst is not None:
                 x_dst = x_dst.unsqueeze(1)
+
+        # Compute the residual
+        if x_dst is not None and self.res is not None:
+            res = self.res(x_dst)
 
         x = (x_src, x_dst)
 
@@ -388,7 +382,10 @@ class GATConv(MessagePassing):
         return alpha
 
     def message(self, x_j: Tensor, alpha: Tensor) -> Tensor:
-        return alpha.unsqueeze(-1) * x_j
+        proj = self.lin(x_j)
+        proj = proj.reshape(x_j.shape[0], self.heads, self.out_channels)
+
+        return (alpha.unsqueeze(-1) * proj)
 
     def __repr__(self) -> str:
         return (f'{self.__class__.__name__}({self.in_channels}, '
