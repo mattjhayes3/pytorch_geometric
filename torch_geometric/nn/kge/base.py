@@ -104,6 +104,9 @@ class KGEModel(torch.nn.Module):
                 :obj:`batch_size`, :obj:`shuffle`, :obj:`drop_last`
                 or :obj:`num_workers`.
         """
+        hpt = _avg_count_per_r(tail_index, rel_type)
+        tph = _avg_count_per_r(head_index, rel_type)
+        self.berns = tph / (tph + hpt)
         return KGTripletLoader(head_index, rel_type, tail_index, **kwargs)
 
     @torch.no_grad()
@@ -185,10 +188,7 @@ class KGEModel(torch.nn.Module):
         # the number of heads per tail and tails per head for each relation.
         # I.e. if there are more tails per head than heads per tail, we should
         # corrupt the head more often to get fewer false negatives.
-        hpt = _avg_count_per_r(tail_index, rel_type)
-        tph = _avg_count_per_r(head_index, rel_type)
-        berns = tph / (tph + hpt)
-        head_mask = berns[rel_type].bernoulli().type(torch.bool)
+        head_mask = self.berns[rel_type].bernoulli().type(torch.bool)
         tail_mask = ~head_mask
         head_index[head_mask] = rnd_index[head_mask]
         tail_index[tail_mask] = rnd_index[tail_mask]
